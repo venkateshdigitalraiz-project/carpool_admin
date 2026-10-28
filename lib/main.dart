@@ -36,6 +36,13 @@ import 'features/places/data/repositories/places_repository_impl.dart';
 import 'features/places/domain/usecases/get_place_predictions_usecase.dart';
 import 'features/places/presentation/bloc/places_bloc.dart';
 
+import 'features/profile/data/datasources/profile_local_datasource.dart';
+import 'features/profile/data/repositories/profile_repository_impl.dart';
+import 'features/profile/domain/usecases/get_profile_usecase.dart';
+import 'features/profile/domain/usecases/update_profile_picture_usecase.dart';
+import 'features/profile/presentation/bloc/profile_bloc.dart';
+import 'features/profile/presentation/bloc/profile_event.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final storedLocal = StoredLocal();
@@ -52,6 +59,7 @@ class BlaBlaCarpoolApp extends StatefulWidget {
   final AuthBloc? authBloc;
   final CarpoolBloc? carpoolBloc;
   final PlacesBloc? placesBloc;
+  final ProfileBloc? profileBloc;
   final UserProfile? initialUser;
   final StoredLocal? storedLocal;
 
@@ -60,6 +68,7 @@ class BlaBlaCarpoolApp extends StatefulWidget {
     this.authBloc,
     this.carpoolBloc,
     this.placesBloc,
+    this.profileBloc,
     this.initialUser,
     this.storedLocal,
   });
@@ -72,6 +81,7 @@ class _BlaBlaCarpoolAppState extends State<BlaBlaCarpoolApp> {
   late final AuthBloc _authBloc;
   late final CarpoolBloc _carpoolBloc;
   late final PlacesBloc _placesBloc;
+  late final ProfileBloc _profileBloc;
   late final GoRouter _router;
 
   @override
@@ -123,6 +133,18 @@ class _BlaBlaCarpoolAppState extends State<BlaBlaCarpoolApp> {
               GetPlacePredictionsUseCase(placesRepository),
         );
 
+    final profileLocalDataSource = ProfileLocalDataSourceImpl();
+    final profileRepository = ProfileRepositoryImpl(
+      localDataSource: profileLocalDataSource,
+    );
+    _profileBloc = widget.profileBloc ??
+        (ProfileBloc(
+          repository: profileRepository,
+          getProfileUseCase: GetProfileUseCase(profileRepository),
+          updateProfilePictureUseCase:
+              UpdateProfilePictureUseCase(profileRepository),
+        )..add(LoadProfileEvent()));
+
     _router = AppRouter.createRouter(_authBloc);
   }
 
@@ -137,6 +159,9 @@ class _BlaBlaCarpoolAppState extends State<BlaBlaCarpoolApp> {
     if (widget.placesBloc == null) {
       _placesBloc.close();
     }
+    if (widget.profileBloc == null) {
+      _profileBloc.close();
+    }
     _router.dispose();
     super.dispose();
   }
@@ -148,6 +173,7 @@ class _BlaBlaCarpoolAppState extends State<BlaBlaCarpoolApp> {
         BlocProvider<AuthBloc>.value(value: _authBloc),
         BlocProvider<CarpoolBloc>.value(value: _carpoolBloc),
         BlocProvider<PlacesBloc>.value(value: _placesBloc),
+        BlocProvider<ProfileBloc>.value(value: _profileBloc),
       ],
       child: MaterialApp.router(
         title: 'Carpool',

@@ -5,10 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 import '../../features/auth/presentation/bloc/auth_state.dart';
 import '../../features/auth/presentation/pages/auth_welcome_page.dart';
-import '../../features/auth/presentation/pages/email_input_page.dart';
 import '../../features/auth/presentation/pages/name_input_page.dart';
 import '../../features/carpool/domain/entities/carpool_ride.dart';
-import '../../features/carpool/presentation/pages/carpool_admin_dashboard_page.dart';
 import '../../features/carpool/presentation/pages/main_navigation_shell.dart';
 import '../../features/carpool/presentation/pages/ride_details_page.dart';
 
@@ -16,7 +14,6 @@ import '../../features/carpool/presentation/pages/ride_details_page.dart';
 class AppRoutes {
   static const String splash = '/splash';
   static const String welcome = '/welcome';
-  static const String emailInput = '/email-input';
   static const String nameInput = '/name-input';
   static const String main = '/';
   static const String rideDetails = '/ride-details';
@@ -50,23 +47,23 @@ class AppRouter {
   static GoRouter createRouter(AuthBloc authBloc) {
     final bool isInitiallyAuthenticated =
         authBloc.state.status == AuthStatus.authenticated ||
-            authBloc.state.user != null;
+        authBloc.state.user != null;
 
     return GoRouter(
       navigatorKey: rootNavigatorKey,
-      initialLocation:
-          isInitiallyAuthenticated ? AppRoutes.main : AppRoutes.welcome,
+      initialLocation: isInitiallyAuthenticated
+          ? AppRoutes.main
+          : AppRoutes.welcome,
       refreshListenable: GoRouterRefreshStream(authBloc.stream),
       redirect: (BuildContext context, GoRouterState state) {
         final authState = authBloc.state;
         final bool isAuthenticated =
             authState.status == AuthStatus.authenticated ||
-                authState.user != null;
+            authState.user != null;
         final String location = state.matchedLocation;
 
-        final bool isAuthRoute = location == AppRoutes.welcome ||
-            location == AppRoutes.emailInput ||
-            location == AppRoutes.nameInput;
+        final bool isAuthRoute =
+            location == AppRoutes.welcome || location == AppRoutes.nameInput;
 
         // If not authenticated, ensure user stays on auth pages
         if (!isAuthenticated) {
@@ -89,11 +86,7 @@ class AppRouter {
           name: 'welcome',
           builder: (context, state) => const AuthWelcomePage(),
         ),
-        GoRoute(
-          path: AppRoutes.emailInput,
-          name: 'email-input',
-          builder: (context, state) => const EmailInputPage(),
-        ),
+
         GoRoute(
           path: AppRoutes.nameInput,
           name: 'name-input',
@@ -122,25 +115,15 @@ class AppRouter {
             if (ride == null) {
               return Scaffold(
                 appBar: AppBar(title: const Text('Ride Details')),
-                body: const Center(
-                  child: Text('Ride details not provided'),
-                ),
+                body: const Center(child: Text('Ride details not provided')),
               );
             }
             return RideDetailsPage(ride: ride);
           },
         ),
-        GoRoute(
-          path: AppRoutes.adminDashboard,
-          name: 'admin-dashboard',
-          builder: (context, state) => const CarpoolAdminDashboardPage(),
-        ),
       ],
-      errorBuilder: (context, state) => Scaffold(
-        body: Center(
-          child: Text('Page not found: ${state.uri}'),
-        ),
-      ),
+      errorBuilder: (context, state) =>
+          Scaffold(body: Center(child: Text('Page not found: ${state.uri}'))),
     );
   }
 }

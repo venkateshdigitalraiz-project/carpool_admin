@@ -1,9 +1,8 @@
+import 'package:carpool_admin/features/profile/presentation/pages/profile_page.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
-import 'inbox_page.dart';
-import 'profile_page.dart';
 import 'publish_ride_page.dart';
 import 'search_rides_page.dart';
 import 'your_rides_page.dart';
@@ -42,7 +41,6 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           });
         },
       ),
-      const InboxPage(),
       ProfilePage(
         onOpenAdminDashboard: () {
           context.push(AppRoutes.adminDashboard);
@@ -51,10 +49,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     ];
 
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: pages,
-      ),
+      body: IndexedStack(index: _currentIndex, children: pages),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: _onTabSelected,
@@ -80,11 +75,6 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
             icon: Icon(Icons.directions_car_outlined),
             activeIcon: Icon(Icons.directions_car, color: AppColors.primary),
             label: 'Your Rides',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.chat_bubble_outline),
-            activeIcon: Icon(Icons.chat_bubble, color: AppColors.primary),
-            label: 'Inbox',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
