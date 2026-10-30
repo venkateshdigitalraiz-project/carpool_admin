@@ -2,15 +2,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../places/data/datasources/geocoding_remote_datasource.dart';
 
-class LatLng {
-  final double latitude;
-  final double longitude;
-
-  const LatLng(this.latitude, this.longitude);
-
-  @override
-  String toString() => 'LatLng($latitude, $longitude)';
-}
+import '../../../../core/models/lat_lng.dart';
+export '../../../../core/models/lat_lng.dart';
 
 /// Fully portable, smooth Google Map display matching Screenshot 3:
 /// - Fetches real Google Maps roadmap tiles directly (mt0-mt3.google.com)
@@ -241,7 +234,9 @@ class _InteractiveMapCanvasState extends State<InteractiveMapCanvas>
   @override
   Widget build(BuildContext context) {
     final rawCity = widget.locationTitle.split(',').first.trim();
-    final cityName = rawCity.isNotEmpty ? rawCity : 'Vijayawada';
+    final cityName = rawCity.isNotEmpty
+        ? rawCity
+        : (widget.locationTitle.isNotEmpty ? widget.locationTitle : 'Location');
     final subtitleText =
         widget.nativeTitle ?? _dynamicSubtitle ?? widget.subtitle ?? '';
 

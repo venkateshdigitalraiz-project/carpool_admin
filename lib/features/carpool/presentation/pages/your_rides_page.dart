@@ -6,7 +6,6 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../../core/widgets/custom_button.dart';
-import '../../../auth/presentation/widgets/survey_holiday_dialog.dart';
 import '../../domain/entities/carpool_ride.dart';
 import '../../domain/entities/passenger_booking.dart';
 import '../bloc/carpool_bloc.dart';
@@ -65,15 +64,22 @@ class _YourRidesPageState extends State<YourRidesPage> {
                           },
                           borderRadius: BorderRadius.circular(24),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
-                              color: isSelected ? const Color(0xFF054752) : const Color(0xFFF0F3F6),
+                              color: isSelected
+                                  ? const Color(0xFF054752)
+                                  : const Color(0xFFF0F3F6),
                               borderRadius: BorderRadius.circular(24),
                             ),
                             child: Text(
                               tab,
                               style: TextStyle(
-                                color: isSelected ? Colors.white : AppColors.primaryNavy,
+                                color: isSelected
+                                    ? Colors.white
+                                    : AppColors.primaryNavy,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 14,
                               ),
@@ -86,56 +92,80 @@ class _YourRidesPageState extends State<YourRidesPage> {
                 ],
               ),
             ),
-            const Divider(height: 1, color: AppColors.borderLight),
-            // Survey Banner prompt (matching screenshot 3 modal)
-            InkWell(
-              onTap: () => SurveyHolidayDialog.show(context),
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: AppColors.chipBackground,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.primary.withAlpha(50)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.beach_access, color: AppColors.primary, size: 20),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Take BlaBlaCar Holiday Survey: Who do you travel with?',
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.primaryNavy,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const Icon(Icons.arrow_forward_ios, size: 12, color: AppColors.primary),
-                  ],
-                ),
-              ),
-            ),
+
             // List / Content based on tab
             Expanded(
               child: BlocBuilder<CarpoolBloc, CarpoolState>(
                 builder: (context, state) {
                   final now = DateTime.now();
 
-                  // Booked rides by status
+                  // All rides that belong to the current user (either as driver or as booked passenger)
                   final List<Map<String, dynamic>> items = [];
                   for (final ride in state.allRides) {
+                    final bool isDriver =
+                        ride.driver.id == 'drv-current-user' ||
+                        ride.driver.name.toLowerCase() == 'vankatesh' ||
+                        ride.driver.name.toLowerCase() == 'venkatesh';
+                    final bool isExplicitCancelled = ride.status == 'CANCELLED';
+                    final bool isCompleted = ride.status == 'COMPLETED';
+
+                    // Check each item's date & time against current date & time:
+                    // If date & time is less than current date & time, it is not visible in Upcoming,
+                    // and instead displays in the Cancelled tab.
+                    final bool isTimePassed = ride.departureTime.isBefore(now);
+                    final bool isCancelledTab =
+                        isExplicitCancelled || isTimePassed;
+
+                    // Upcoming: Date and time must NOT be less than current date & time, and not cancelled or completed
+                    final bool isUpcoming =
+                        !isCancelledTab && !isCompleted && !isTimePassed;
+                    final bool isPast = isCompleted;
+
+                    // 1. Published Ride as Driver
+                    if (isDriver) {
+                      if (_selectedTab == 'Upcoming' && isUpcoming) {
+                        items.add({'ride': ride, 'isDriver': true});
+                      } else if (_selectedTab == 'Past' && isPast) {
+                        items.add({'ride': ride, 'isDriver': true});
+                      } else if (_selectedTab == 'Cancelled' &&
+                          isCancelledTab) {
+                        items.add({'ride': ride, 'isDriver': true});
+                      }
+                    }
+
+                    // 2. Booked rides as Passenger
                     for (final booking in ride.bookings) {
-                      if (_selectedTab == 'Upcoming' &&
-                          booking.status == 'CONFIRMED' &&
-                          ride.departureTime.isAfter(now.subtract(const Duration(hours: 1)))) {
-                        items.add({'ride': ride, 'booking': booking});
-                      } else if (_selectedTab == 'Past' &&
-                          (ride.departureTime.isBefore(now.subtract(const Duration(hours: 1))) ||
-                              booking.status == 'COMPLETED')) {
-                        items.add({'ride': ride, 'booking': booking});
-                      } else if (_selectedTab == 'Cancelled' && booking.status == 'CANCELLED') {
-                        items.add({'ride': ride, 'booking': booking});
+                      final bool bookingExplicitCancelled =
+                          booking.status == 'CANCELLED';
+                      final bool isBookingCancelledTab =
+                          bookingExplicitCancelled || isCancelledTab;
+                      final bool bookingCompleted =
+                          booking.status == 'COMPLETED' || isCompleted;
+                      final bool bookingUpcoming =
+                          !isBookingCancelledTab &&
+                          !bookingCompleted &&
+                          !isTimePassed;
+                      final bool bookingPast = bookingCompleted;
+
+                      if (_selectedTab == 'Upcoming' && bookingUpcoming) {
+                        items.add({
+                          'ride': ride,
+                          'booking': booking,
+                          'isDriver': false,
+                        });
+                      } else if (_selectedTab == 'Past' && bookingPast) {
+                        items.add({
+                          'ride': ride,
+                          'booking': booking,
+                          'isDriver': false,
+                        });
+                      } else if (_selectedTab == 'Cancelled' &&
+                          isBookingCancelledTab) {
+                        items.add({
+                          'ride': ride,
+                          'booking': booking,
+                          'isDriver': false,
+                        });
                       }
                     }
                   }
@@ -150,9 +180,16 @@ class _YourRidesPageState extends State<YourRidesPage> {
                     itemBuilder: (context, index) {
                       final item = items[index];
                       final CarpoolRide ride = item['ride'] as CarpoolRide;
-                      final PassengerBooking booking = item['booking'] as PassengerBooking;
+                      final PassengerBooking? booking =
+                          item['booking'] as PassengerBooking?;
+                      final bool isDriver = item['isDriver'] as bool? ?? false;
 
-                      return _buildRideBookingCard(context, ride, booking);
+                      return _buildRideCard(
+                        context,
+                        ride: ride,
+                        booking: booking,
+                        isDriver: isDriver,
+                      );
                     },
                   );
                 },
@@ -214,14 +251,32 @@ class _YourRidesPageState extends State<YourRidesPage> {
     );
   }
 
-  Widget _buildRideBookingCard(BuildContext context, CarpoolRide ride, PassengerBooking booking) {
+  Widget _buildRideCard(
+    BuildContext context, {
+    required CarpoolRide ride,
+    PassengerBooking? booking,
+    required bool isDriver,
+  }) {
+    final priceText = isDriver
+        ? '${DateFormatter.formatCurrency(ride.pricePerSeat)} / seat'
+        : DateFormatter.formatCurrency(
+            booking?.totalPrice ?? ride.pricePerSeat,
+          );
+
+    final seatsSubtext = isDriver
+        ? 'Departure: ${DateFormatter.formatTime(ride.departureTime)} · ${ride.availableSeats} of ${ride.totalSeats} seats available'
+        : 'Departure: ${DateFormatter.formatTime(ride.departureTime)} · ${booking?.seatsBooked ?? 1} seat reserved';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(
+          color: isDriver ? AppColors.primary.withAlpha(90) : AppColors.border,
+          width: isDriver ? 1.5 : 1,
+        ),
         boxShadow: const [
           BoxShadow(
             color: Color(0x06000000),
@@ -233,59 +288,202 @@ class _YourRidesPageState extends State<YourRidesPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header: Date & Role Badge & Price
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                DateFormatter.formatDate(ride.departureTime),
-                style: AppTypography.titleMedium.copyWith(color: AppColors.primary),
+              Expanded(
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    Text(
+                      DateFormatter.formatDate(ride.departureTime),
+                      style: AppTypography.titleMedium.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (isDriver)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2.5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F5E9),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: const Color(0xFF2E7D32).withAlpha(80),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(
+                              Icons.directions_car,
+                              size: 11,
+                              color: Color(0xFF2E7D32),
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'DRIVER',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF2E7D32),
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Text(
-                DateFormatter.formatCurrency(booking.totalPrice),
-                style: AppTypography.titleLarge.copyWith(color: AppColors.primaryNavy),
+                priceText,
+                style: AppTypography.titleLarge.copyWith(
+                  color: AppColors.primaryNavy,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            '${ride.origin} → ${ride.destination}',
-            style: AppTypography.titleMedium.copyWith(fontSize: 16),
+          const SizedBox(height: 10),
+
+          // Origin -> Destination
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${ride.origin} → ${ride.destination}',
+                  style: AppTypography.titleMedium.copyWith(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primaryNavy,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
+
+          // Departure time and seats
           Text(
-            'Departure: ${DateFormatter.formatTime(ride.departureTime)} · ${booking.seatsBooked} seat reserved',
-            style: AppTypography.bodySmall,
+            seatsSubtext,
+            style: AppTypography.bodySmall.copyWith(
+              color: const Color(0xFF5E7A8A),
+              fontWeight: FontWeight.w500,
+            ),
           ),
+
+          // Optional Stopovers info
+          if (ride.intermediateStops.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(
+                  Icons.alt_route_rounded,
+                  size: 14,
+                  color: Color(0xFF0070E0),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Stopovers: ${ride.intermediateStops.join(' • ')}',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: const Color(0xFF0070E0),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+
           const SizedBox(height: 12),
           const Divider(height: 1, color: AppColors.borderLight),
           const SizedBox(height: 12),
+
+          // Driver & Actions
           Row(
             children: [
               CircleAvatar(
                 radius: 16,
                 backgroundImage: NetworkImage(ride.driver.avatarUrl),
-                onBackgroundImageError: (error, stack) {},
+                onBackgroundImageError: (_, _) {},
                 child: Text(ride.driver.name[0]),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  'Driver: ${ride.driver.name}',
-                  style: AppTypography.titleMedium.copyWith(fontSize: 13),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isDriver ? 'You (Driver)' : 'Driver: ${ride.driver.name}',
+                      style: AppTypography.titleMedium.copyWith(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (isDriver && ride.driver.carModel.isNotEmpty)
+                      Text(
+                        '${ride.driver.carModel} · ${ride.driver.plateNumber}',
+                        style: AppTypography.bodySmall.copyWith(
+                          fontSize: 11,
+                          color: const Color(0xFF708C91),
+                        ),
+                      ),
+                  ],
                 ),
               ),
               if (_selectedTab == 'Upcoming')
                 TextButton(
                   onPressed: () {
-                    context.read<CarpoolBloc>().add(CancelBookingEvent(booking.id));
+                    if (isDriver) {
+                      context.read<CarpoolBloc>().add(
+                        UpdateRideStatusEvent(
+                          rideId: ride.id,
+                          status: 'CANCELLED',
+                        ),
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Your published ride has been cancelled.',
+                          ),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                    } else if (booking != null) {
+                      context.read<CarpoolBloc>().add(
+                        CancelBookingEvent(booking.id),
+                      );
+                    }
                   },
-                  style: TextButton.styleFrom(foregroundColor: AppColors.error),
-                  child: const Text('Cancel Booking'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                  ),
+                  child: Text(isDriver ? 'Cancel Ride' : 'Cancel Booking'),
                 ),
               TextButton(
                 onPressed: () {
                   context.push(AppRoutes.rideDetails, extra: ride);
                 },
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                ),
                 child: const Text('Details'),
               ),
             ],

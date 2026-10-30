@@ -50,13 +50,14 @@ class _SearchRidesPageState extends State<SearchRidesPage> {
 
   void _onSearchPressed() {
     context.read<PlacesBloc>().add(const ClearPlacesEvent());
-    final count = int.tryParse(_passengersCtrl.text.trim()) ?? _passengers;
+    final rawCount = int.tryParse(_passengersCtrl.text.trim()) ?? _passengers;
+    final count = (rawCount >= 1 && rawCount <= 4) ? rawCount : 1;
     context.read<CarpoolBloc>().add(
       SearchRidesEvent(
         origin: _originCtrl.text.trim(),
         destination: _destCtrl.text.trim(),
         date: _selectedDate ?? DateTime.now(),
-        passengers: count > 0 ? count : 1,
+        passengers: count,
         returnDate: _returnDate,
       ),
     );
@@ -278,7 +279,9 @@ class _SearchRidesPageState extends State<SearchRidesPage> {
                         isLoading: placesState.isOriginLoading,
                         onPlaceSelected: (prediction) {
                           setState(() {
-                            _originCtrl.text = prediction.displayAddress;
+                            _originCtrl.text = prediction.mainText.isNotEmpty
+                                ? prediction.mainText
+                                : prediction.displayAddress;
                           });
                           context.read<PlacesBloc>().add(
                             SelectPlacePredictionEvent(
@@ -336,7 +339,9 @@ class _SearchRidesPageState extends State<SearchRidesPage> {
                         isLoading: placesState.isDestLoading,
                         onPlaceSelected: (prediction) {
                           setState(() {
-                            _destCtrl.text = prediction.displayAddress;
+                            _destCtrl.text = prediction.mainText.isNotEmpty
+                                ? prediction.mainText
+                                : prediction.displayAddress;
                           });
                           context.read<PlacesBloc>().add(
                             SelectPlacePredictionEvent(
@@ -483,7 +488,10 @@ class _SearchRidesPageState extends State<SearchRidesPage> {
                                       keyboardType: TextInputType.number,
                                       inputFormatters: [
                                         FilteringTextInputFormatter.digitsOnly,
-                                        LengthLimitingTextInputFormatter(2),
+                                        LengthLimitingTextInputFormatter(1),
+                                        FilteringTextInputFormatter.allow(
+                                          RegExp(r'[1-4]'),
+                                        ),
                                       ],
                                       style: AppTypography.bodyMedium.copyWith(
                                         color: AppColors.textPrimary,
@@ -500,7 +508,9 @@ class _SearchRidesPageState extends State<SearchRidesPage> {
                                       ),
                                       onChanged: (val) {
                                         final count = int.tryParse(val.trim());
-                                        if (count != null && count > 0) {
+                                        if (count != null &&
+                                            count >= 1 &&
+                                            count <= 4) {
                                           _passengers = count;
                                         }
                                       },
@@ -514,179 +524,182 @@ class _SearchRidesPageState extends State<SearchRidesPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  // Second Row: Return Date & Number of Persons
-                  Row(
-                    children: [
-                      // Return Date Selector
-                      Expanded(
-                        flex: 3,
-                        child: InkWell(
-                          onTap: _pickReturnDate,
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 11,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.inputFill,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: _returnDate != null
-                                    ? AppColors.primary.withAlpha(140)
-                                    : AppColors.inputBorder,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.calendar_month_outlined,
-                                  size: 18,
-                                  color: _returnDate != null
-                                      ? AppColors.primary
-                                      : AppColors.textSecondary,
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        'Return Date',
-                                        style: AppTypography.bodySmall.copyWith(
-                                          color: _returnDate != null
-                                              ? AppColors.primary
-                                              : AppColors.textSecondary,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        _returnDate != null
-                                            ? DateFormatter.formatDate(
-                                                _returnDate!,
-                                              )
-                                            : 'Add return date',
-                                        style: AppTypography.bodyMedium
-                                            .copyWith(
-                                              color: _returnDate != null
-                                                  ? AppColors.textPrimary
-                                                  : AppColors.textSecondary,
-                                              fontWeight: _returnDate != null
-                                                  ? FontWeight.w700
-                                                  : FontWeight.w500,
-                                              fontSize: 14,
-                                            ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (_returnDate != null)
-                                  GestureDetector(
-                                    onTap: () {
-                                      setState(() {
-                                        _returnDate = null;
-                                      });
-                                    },
-                                    child: const Padding(
-                                      padding: EdgeInsets.only(left: 4),
-                                      child: Icon(
-                                        Icons.close,
-                                        size: 16,
-                                        color: AppColors.textSecondary,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      // Return Passengers Selector
-                      Expanded(
-                        flex: 2,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 11,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.inputFill,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _returnDate != null
-                                  ? AppColors.primary.withAlpha(140)
-                                  : AppColors.inputBorder,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.person_outline,
-                                size: 18,
-                                color: _returnDate != null
-                                    ? AppColors.primary
-                                    : AppColors.textSecondary,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      'Seats',
-                                      style: AppTypography.bodySmall.copyWith(
-                                        color: _returnDate != null
-                                            ? AppColors.primary
-                                            : AppColors.textSecondary,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    TextField(
-                                      controller: _returnPassengersCtrl,
-                                      keyboardType: TextInputType.number,
-                                      inputFormatters: [
-                                        FilteringTextInputFormatter.digitsOnly,
-                                        LengthLimitingTextInputFormatter(2),
-                                      ],
-                                      style: AppTypography.bodyMedium.copyWith(
-                                        color: _returnDate != null
-                                            ? AppColors.textPrimary
-                                            : AppColors.textSecondary,
-                                        fontWeight: _returnDate != null
-                                            ? FontWeight.w700
-                                            : FontWeight.w500,
-                                        fontSize: 14,
-                                      ),
-                                      decoration: const InputDecoration(
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.zero,
-                                        border: InputBorder.none,
-                                        enabledBorder: InputBorder.none,
-                                        focusedBorder: InputBorder.none,
-                                        hintText: '1',
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
 
+                  // const SizedBox(height: 10),
+                  // // Second Row: Return Date & Number of Persons
+                  // Row(
+                  //   children: [
+                  //     // Return Date Selector
+                  //     Expanded(
+                  //       flex: 3,
+                  //       child: InkWell(
+                  //         onTap: _pickReturnDate,
+                  //         borderRadius: BorderRadius.circular(12),
+                  //         child: Container(
+                  //           padding: const EdgeInsets.symmetric(
+                  //             horizontal: 14,
+                  //             vertical: 11,
+                  //           ),
+                  //           decoration: BoxDecoration(
+                  //             color: AppColors.inputFill,
+                  //             borderRadius: BorderRadius.circular(12),
+                  //             border: Border.all(
+                  //               color: _returnDate != null
+                  //                   ? AppColors.primary.withAlpha(140)
+                  //                   : AppColors.inputBorder,
+                  //             ),
+                  //           ),
+                  //           child: Row(
+                  //             children: [
+                  //               Icon(
+                  //                 Icons.calendar_month_outlined,
+                  //                 size: 18,
+                  //                 color: _returnDate != null
+                  //                     ? AppColors.primary
+                  //                     : AppColors.textSecondary,
+                  //               ),
+                  //               const SizedBox(width: 10),
+                  //               Expanded(
+                  //                 child: Column(
+                  //                   crossAxisAlignment:
+                  //                       CrossAxisAlignment.start,
+                  //                   mainAxisSize: MainAxisSize.min,
+                  //                   children: [
+                  //                     Text(
+                  //                       'Return Date',
+                  //                       style: AppTypography.bodySmall.copyWith(
+                  //                         color: _returnDate != null
+                  //                             ? AppColors.primary
+                  //                             : AppColors.textSecondary,
+                  //                         fontSize: 11,
+                  //                         fontWeight: FontWeight.w500,
+                  //                       ),
+                  //                     ),
+                  //                     const SizedBox(height: 2),
+                  //                     Text(
+                  //                       _returnDate != null
+                  //                           ? DateFormatter.formatDate(
+                  //                               _returnDate!,
+                  //                             )
+                  //                           : 'Add return date',
+                  //                       style: AppTypography.bodyMedium
+                  //                           .copyWith(
+                  //                             color: _returnDate != null
+                  //                                 ? AppColors.textPrimary
+                  //                                 : AppColors.textSecondary,
+                  //                             fontWeight: _returnDate != null
+                  //                                 ? FontWeight.w700
+                  //                                 : FontWeight.w500,
+                  //                             fontSize: 14,
+                  //                           ),
+                  //                       maxLines: 1,
+                  //                       overflow: TextOverflow.ellipsis,
+                  //                     ),
+                  //                   ],
+                  //                 ),
+                  //               ),
+                  //               if (_returnDate != null)
+                  //                 GestureDetector(
+                  //                   onTap: () {
+                  //                     setState(() {
+                  //                       _returnDate = null;
+                  //                     });
+                  //                   },
+                  //                   child: const Padding(
+                  //                     padding: EdgeInsets.only(left: 4),
+                  //                     child: Icon(
+                  //                       Icons.close,
+                  //                       size: 16,
+                  //                       color: AppColors.textSecondary,
+                  //                     ),
+                  //                   ),
+                  //                 ),
+                  //             ],
+                  //           ),
+                  //         ),
+                  //       ),
+                  //     ),
+                  //     const SizedBox(width: 10),
+                  //     // Return Passengers Selector
+                  //     Expanded(
+                  //       flex: 2,
+                  //       child: Container(
+                  //         padding: const EdgeInsets.symmetric(
+                  //           horizontal: 12,
+                  //           vertical: 11,
+                  //         ),
+                  //         decoration: BoxDecoration(
+                  //           color: AppColors.inputFill,
+                  //           borderRadius: BorderRadius.circular(12),
+                  //           border: Border.all(
+                  //             color: _returnDate != null
+                  //                 ? AppColors.primary.withAlpha(140)
+                  //                 : AppColors.inputBorder,
+                  //           ),
+                  //         ),
+                  //         child: Row(
+                  //           children: [
+                  //             Icon(
+                  //               Icons.person_outline,
+                  //               size: 18,
+                  //               color: _returnDate != null
+                  //                   ? AppColors.primary
+                  //                   : AppColors.textSecondary,
+                  //             ),
+                  //             const SizedBox(width: 8),
+                  //             Expanded(
+                  //               child: Column(
+                  //                 crossAxisAlignment: CrossAxisAlignment.start,
+                  //                 mainAxisSize: MainAxisSize.min,
+                  //                 children: [
+                  //                   Text(
+                  //                     'Seats',
+                  //                     style: AppTypography.bodySmall.copyWith(
+                  //                       color: _returnDate != null
+                  //                           ? AppColors.primary
+                  //                           : AppColors.textSecondary,
+                  //                       fontSize: 11,
+                  //                       fontWeight: FontWeight.w500,
+                  //                     ),
+                  //                   ),
+                  //                   const SizedBox(height: 2),
+                  //                   TextField(
+                  //                     controller: _returnPassengersCtrl,
+                  //                     keyboardType: TextInputType.number,
+                  //                     inputFormatters: [
+                  //                       FilteringTextInputFormatter.digitsOnly,
+                  //                       LengthLimitingTextInputFormatter(1),
+                  //                       FilteringTextInputFormatter.allow(
+                  //                         RegExp(r'[1-4]'),
+                  //                       ),
+                  //                     ],
+                  //                     style: AppTypography.bodyMedium.copyWith(
+                  //                       color: _returnDate != null
+                  //                           ? AppColors.textPrimary
+                  //                           : AppColors.textSecondary,
+                  //                       fontWeight: _returnDate != null
+                  //                           ? FontWeight.w700
+                  //                           : FontWeight.w500,
+                  //                       fontSize: 14,
+                  //                     ),
+                  //                     decoration: const InputDecoration(
+                  //                       isDense: true,
+                  //                       contentPadding: EdgeInsets.zero,
+                  //                       border: InputBorder.none,
+                  //                       enabledBorder: InputBorder.none,
+                  //                       focusedBorder: InputBorder.none,
+                  //                       hintText: '1',
+                  //                     ),
+                  //                   ),
+                  //                 ],
+                  //               ),
+                  //             ),
+                  //           ],
+                  //         ),
+                  //       ),
+                  //     ),
+                  //   ],
+                  // ),
                   const SizedBox(height: 16),
                   CustomButton(
                     text: 'Search Rides',
@@ -802,35 +815,35 @@ class _SearchRidesPageState extends State<SearchRidesPage> {
     }
   }
 
-  Future<void> _pickReturnDate() async {
-    final baseDate = _selectedDate ?? DateTime.now();
-    final initial = _returnDate != null && !_returnDate!.isBefore(baseDate)
-        ? _returnDate!
-        : baseDate;
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: baseDate,
-      lastDate: DateTime.now().add(const Duration(days: 90)),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.primary,
-              onPrimary: Colors.white,
-              surface: AppColors.surface,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() {
-        _returnDate = picked;
-      });
-    }
-  }
+  // Future<void> _pickReturnDate() async {
+  //   final baseDate = _selectedDate ?? DateTime.now();
+  //   final initial = _returnDate != null && !_returnDate!.isBefore(baseDate)
+  //       ? _returnDate!
+  //       : baseDate;
+  //   final picked = await showDatePicker(
+  //     context: context,
+  //     initialDate: initial,
+  //     firstDate: baseDate,
+  //     lastDate: DateTime.now().add(const Duration(days: 90)),
+  //     builder: (context, child) {
+  //       return Theme(
+  //         data: ThemeData.light().copyWith(
+  //           colorScheme: const ColorScheme.light(
+  //             primary: AppColors.primary,
+  //             onPrimary: Colors.white,
+  //             surface: AppColors.surface,
+  //           ),
+  //         ),
+  //         child: child!,
+  //       );
+  //     },
+  //   );
+  //   if (picked != null) {
+  //     setState(() {
+  //       _returnDate = picked;
+  //     });
+  //   }
+  // }
 
   void _openFilterSheet(BuildContext context) {
     final bloc = context.read<CarpoolBloc>();

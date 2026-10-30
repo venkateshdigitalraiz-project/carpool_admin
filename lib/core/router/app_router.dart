@@ -10,6 +10,11 @@ import '../../features/carpool/domain/entities/carpool_ride.dart';
 import '../../features/carpool/presentation/pages/main_navigation_shell.dart';
 import '../../features/carpool/presentation/pages/ride_details_page.dart';
 
+import '../../features/places/domain/entities/place_prediction.dart';
+import '../../features/carpool/domain/entities/route_option.dart';
+import '../../features/carpool/presentation/pages/route_selection_page.dart';
+import '../../features/carpool/presentation/pages/stopovers_selection_page.dart';
+
 /// Centralized route constants for type-safe and consistent navigation
 class AppRoutes {
   static const String splash = '/splash';
@@ -17,6 +22,8 @@ class AppRoutes {
   static const String nameInput = '/name-input';
   static const String main = '/';
   static const String rideDetails = '/ride-details';
+  static const String routeSelection = '/route-selection';
+  static const String stopovers = '/stopovers';
   static const String adminDashboard = '/admin';
 }
 
@@ -119,6 +126,60 @@ class AppRouter {
               );
             }
             return RideDetailsPage(ride: ride);
+          },
+        ),
+        GoRoute(
+          path: AppRoutes.routeSelection,
+          name: 'route-selection',
+          builder: (context, state) {
+            final extra = state.extra as Map<String, dynamic>? ?? {};
+            final origin = extra['origin'] as PlacePrediction?;
+            final destination = extra['destination'] as PlacePrediction?;
+            final originText = extra['originText'] as String?;
+            final destinationText = extra['destinationText'] as String?;
+            final title = extra['title'] as String? ?? 'What is your return route?';
+            final onRouteConfirmed =
+                extra['onRouteConfirmed'] as ValueChanged<RouteOption>?;
+            return RouteSelectionPage(
+              origin: origin,
+              destination: destination,
+              originText: originText,
+              destinationText: destinationText,
+              title: title,
+              onBack: () => context.pop(),
+              onRouteConfirmed: (route) {
+                if (onRouteConfirmed != null) {
+                  onRouteConfirmed(route);
+                } else {
+                  context.pop(route);
+                }
+              },
+            );
+          },
+        ),
+        GoRoute(
+          path: AppRoutes.stopovers,
+          name: 'stopovers',
+          builder: (context, state) {
+            final extra = state.extra as Map<String, dynamic>? ?? {};
+            final origin = extra['origin'] as String? ?? '';
+            final destination = extra['destination'] as String? ?? '';
+            final selectedRoute = extra['selectedRoute'] as RouteOption?;
+            final onStopoversConfirmed =
+                extra['onStopoversConfirmed'] as ValueChanged<List<String>>?;
+            return StopoversSelectionPage(
+              origin: origin,
+              destination: destination,
+              selectedRoute: selectedRoute,
+              onBack: () => context.pop(),
+              onStopoversConfirmed: (stopovers) {
+                if (onStopoversConfirmed != null) {
+                  onStopoversConfirmed(stopovers);
+                } else {
+                  context.pop(stopovers);
+                }
+              },
+            );
           },
         ),
       ],

@@ -55,11 +55,31 @@ class _PublishLocationStepViewState extends State<PublishLocationStepView> {
     if (widget.initialLocation != null) {
       _selectedPrediction = widget.initialLocation;
       _searchCtrl.text = widget.initialLocation!.mainText;
-      _mapDetailCtrl.text = widget.initialLocation!.displayAddress;
+      _mapDetailCtrl.text = widget.initialLocation!.mainText;
       _stage = LocationStepStage.mapPreview;
       _updateMapEstimate();
     } else {
       _stage = LocationStepStage.initialInput;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant PublishLocationStepView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialLocation != oldWidget.initialLocation) {
+      if (widget.initialLocation != null) {
+        _selectedPrediction = widget.initialLocation;
+        _searchCtrl.text = widget.initialLocation!.mainText;
+        _mapDetailCtrl.text = widget.initialLocation!.mainText;
+        _stage = LocationStepStage.mapPreview;
+        _updateMapEstimate();
+      } else {
+        _selectedPrediction = null;
+        _searchCtrl.clear();
+        _mapDetailCtrl.clear();
+        _stage = LocationStepStage.initialInput;
+        _mapEstimate = null;
+      }
     }
   }
 
@@ -99,11 +119,9 @@ class _PublishLocationStepViewState extends State<PublishLocationStepView> {
         _focusNode.requestFocus();
       }
     });
-    if (_searchCtrl.text.isNotEmpty) {
-      context.read<PlacesBloc>().add(
-        SearchPlacesQueryEvent(query: _searchCtrl.text.trim(), target: _target),
-      );
-    }
+    context.read<PlacesBloc>().add(
+      SearchPlacesQueryEvent(query: _searchCtrl.text.trim(), target: _target),
+    );
   }
 
   void _onQueryChanged(String query) {
@@ -119,7 +137,7 @@ class _PublishLocationStepViewState extends State<PublishLocationStepView> {
     setState(() {
       _selectedPrediction = prediction;
       _searchCtrl.text = prediction.mainText;
-      _mapDetailCtrl.text = prediction.displayAddress;
+      _mapDetailCtrl.text = prediction.mainText;
       _stage = LocationStepStage.mapPreview;
     });
     _updateMapEstimate();
@@ -133,13 +151,13 @@ class _PublishLocationStepViewState extends State<PublishLocationStepView> {
       final text = _mapDetailCtrl.text.trim().isNotEmpty
           ? _mapDetailCtrl.text.trim()
           : _searchCtrl.text.trim();
+      final mainPart = text.contains(',') ? text.split(',').first.trim() : text;
+      final defaultLabel = widget.isPickup ? 'Pick-up Location' : 'Drop-off Location';
       final custom = PlacePrediction(
         placeId: 'custom_${DateTime.now().millisecondsSinceEpoch}',
-        fullText: text.isNotEmpty ? text : 'Vijayawada, Andhra Pradesh, India',
-        mainText: text.split(',').first.trim().isNotEmpty
-            ? text.split(',').first.trim()
-            : 'Vijayawada',
-        secondaryText: 'India',
+        fullText: text.isNotEmpty ? text : defaultLabel,
+        mainText: mainPart.isNotEmpty ? mainPart : defaultLabel,
+        secondaryText: '',
       );
       widget.onLocationConfirmed(custom);
     }
@@ -209,12 +227,25 @@ class _PublishLocationStepViewState extends State<PublishLocationStepView> {
                 children: [
                   const Icon(Icons.search, color: Color(0xFF708C91), size: 22),
                   const SizedBox(width: 12),
-                  Text(
-                    'Enter the full address',
-                    style: AppTypography.bodyLarge.copyWith(
-                      color: const Color(0xFF708C91),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
+                  Expanded(
+                    child: Text(
+                      _selectedPrediction?.mainText.isNotEmpty == true
+                          ? _selectedPrediction!.mainText
+                          : (_searchCtrl.text.isNotEmpty
+                              ? _searchCtrl.text
+                              : (widget.isPickup
+                                  ? 'Search pick-up city, town, or area'
+                                  : 'Search drop-off city, town, or area')),
+                      style: AppTypography.bodyLarge.copyWith(
+                        color: (_selectedPrediction != null || _searchCtrl.text.isNotEmpty)
+                            ? AppColors.primaryNavy
+                            : const Color(0xFF708C91),
+                        fontSize: 16,
+                        fontWeight: (_selectedPrediction != null || _searchCtrl.text.isNotEmpty)
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -260,9 +291,13 @@ class _PublishLocationStepViewState extends State<PublishLocationStepView> {
                         size: 26,
                       ),
                       onPressed: () {
-                        setState(() {
-                          _stage = LocationStepStage.initialInput;
-                        });
+                        if (_selectedPrediction != null) {
+                          setState(() {
+                            _stage = LocationStepStage.mapPreview;
+                          });
+                        } else {
+                          widget.onBack();
+                        }
                       },
                     ),
                     // Search input
@@ -276,7 +311,9 @@ class _PublishLocationStepViewState extends State<PublishLocationStepView> {
                           color: AppColors.primaryNavy,
                         ),
                         decoration: InputDecoration(
-                          hintText: 'Enter the full address',
+                          hintText: widget.isPickup
+                              ? 'Enter pick-up city or town'
+                              : 'Enter drop-off city or town',
                           hintStyle: AppTypography.bodyLarge.copyWith(
                             color: const Color(0xFF708C91),
                             fontSize: 16,
@@ -300,7 +337,7 @@ class _PublishLocationStepViewState extends State<PublishLocationStepView> {
                         onPressed: () {
                           _searchCtrl.clear();
                           context.read<PlacesBloc>().add(
-                            ClearPlacesEvent(target: _target),
+                            SearchPlacesQueryEvent(query: '', target: _target),
                           );
                           setState(() {});
                         },
@@ -317,89 +354,174 @@ class _PublishLocationStepViewState extends State<PublishLocationStepView> {
                 valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
               ),
 
-            // Autocomplete Prediction List matching Screenshot 2
-            Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 8,
-                ),
-                itemCount: predictions.length,
-                separatorBuilder: (_, _) => const Divider(
-                  height: 1,
-                  color: Color(0xFFE8ECEF),
-                  indent: 0,
-                  endIndent: 0,
-                ),
-                itemBuilder: (context, index) {
-                  final item = predictions[index];
-                  final isFirstItem = index == 0;
-                  final subtitle = item.secondaryText.isNotEmpty
-                      ? item.secondaryText
-                      : item.fullText;
-
-                  return InkWell(
-                    onTap: () => _onSelectPrediction(item),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          // Clock icon for top item or location pin
-                          if (isFirstItem)
-                            const Padding(
-                              padding: EdgeInsets.only(right: 14),
-                              child: Icon(
-                                Icons.access_time,
-                                color: Color(0xFF708C91),
-                                size: 22,
-                              ),
-                            )
-                          else
-                            const SizedBox(width: 4),
-
-                          // Text Info
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item.mainText,
-                                  style: AppTypography.titleMedium.copyWith(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.primaryNavy,
-                                  ),
-                                ),
-                                if (subtitle.isNotEmpty) ...[
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    subtitle,
-                                    style: AppTypography.bodySmall.copyWith(
-                                      fontSize: 13,
-                                      color: const Color(0xFF708C91),
-                                      fontWeight: FontWeight.w500,
-                                      height: 1.3,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-
-                          // Right Chevron '>'
-                          const Icon(
-                            Icons.chevron_right,
-                            color: Color(0xFF708C91),
-                            size: 20,
-                          ),
-                        ],
+            // Section Header
+            if (predictions.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      _searchCtrl.text.trim().isEmpty
+                          ? Icons.star_rounded
+                          : Icons.location_city_rounded,
+                      size: 16,
+                      color: const Color(0xFF708C91),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _searchCtrl.text.trim().isEmpty
+                          ? 'ALL CITIES & TOWNS'
+                          : 'MATCHING CITIES & TOWNS (${predictions.length})',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: const Color(0xFF708C91),
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
+                        fontSize: 11,
                       ),
                     ),
-                  );
-                },
+                  ],
+                ),
               ),
-            ),
+
+            // Autocomplete Prediction List matching Screenshot 2
+            if (predictions.isEmpty && !isLoading)
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.location_city_outlined,
+                          size: 48,
+                          color: Color(0xFF708C91),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No matching city or town found',
+                          style: AppTypography.titleMedium.copyWith(
+                            color: AppColors.primaryNavy,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (_searchCtrl.text.trim().isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'You can still select "${_searchCtrl.text.trim()}" directly',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: const Color(0xFF708C91),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            icon: const Icon(Icons.check, size: 18),
+                            label: Text('Use "${_searchCtrl.text.trim()}"'),
+                            onPressed: () {
+                              final query = _searchCtrl.text.trim();
+                              final custom = PlacePrediction(
+                                placeId: 'custom_${DateTime.now().millisecondsSinceEpoch}',
+                                fullText: query,
+                                mainText: query,
+                                secondaryText: '',
+                              );
+                              _onSelectPrediction(custom);
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
+                  itemCount: predictions.length,
+                  separatorBuilder: (_, _) => const Divider(
+                    height: 1,
+                    color: Color(0xFFE8ECEF),
+                    indent: 0,
+                    endIndent: 0,
+                  ),
+                  itemBuilder: (context, index) {
+                    final item = predictions[index];
+                    final isFirstItem = index == 0;
+                    final subtitle = item.secondaryText.isNotEmpty
+                        ? item.secondaryText
+                        : item.fullText;
+
+                    return InkWell(
+                      onTap: () => _onSelectPrediction(item),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            // Clock icon for top item or location pin
+                            Padding(
+                              padding: const EdgeInsets.only(right: 14),
+                              child: Icon(
+                                isFirstItem ? Icons.access_time : Icons.location_on_outlined,
+                                color: const Color(0xFF708C91),
+                                size: 22,
+                              ),
+                            ),
+
+                            // Text Info
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.mainText,
+                                    style: AppTypography.titleMedium.copyWith(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.primaryNavy,
+                                    ),
+                                  ),
+                                  if (subtitle.isNotEmpty) ...[
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      subtitle,
+                                      style: AppTypography.bodySmall.copyWith(
+                                        fontSize: 13,
+                                        color: const Color(0xFF708C91),
+                                        fontWeight: FontWeight.w500,
+                                        height: 1.3,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+
+                            // Right Chevron '>'
+                            const Icon(
+                              Icons.chevron_right,
+                              color: Color(0xFF708C91),
+                              size: 20,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
           ],
         );
       },
@@ -418,7 +540,9 @@ class _PublishLocationStepViewState extends State<PublishLocationStepView> {
         : (_selectedPrediction?.mainText.isNotEmpty == true
               ? _selectedPrediction!.mainText
               : _searchCtrl.text.trim());
-    final locTitle = selectedText.isNotEmpty ? selectedText : 'Vijayawada';
+    final locTitle = selectedText.isNotEmpty
+        ? selectedText
+        : (widget.isPickup ? 'Pick-up Location' : 'Drop-off Location');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -439,11 +563,7 @@ class _PublishLocationStepViewState extends State<PublishLocationStepView> {
                   color: AppColors.primaryNavy,
                   size: 26,
                 ),
-                onPressed: () {
-                  setState(() {
-                    _stage = LocationStepStage.searching;
-                  });
-                },
+                onPressed: widget.onBack,
               ),
               const SizedBox(height: 12),
 
@@ -485,11 +605,13 @@ class _PublishLocationStepViewState extends State<PublishLocationStepView> {
                         style: AppTypography.bodyLarge.copyWith(
                           color: AppColors.primaryNavy,
                           fontSize: 15,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
-                        decoration: const InputDecoration(
-                          hintText: 'e.g. Manchester Picadilly',
-                          hintStyle: TextStyle(
+                        decoration: InputDecoration(
+                          hintText: widget.isPickup
+                              ? 'e.g. Hyderabad, Vijayawada'
+                              : 'e.g. Rajamahendravaram, Guntur',
+                          hintStyle: const TextStyle(
                             color: Color(0xFF708C91),
                             fontSize: 15,
                           ),

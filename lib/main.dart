@@ -43,6 +43,16 @@ import 'features/profile/domain/usecases/update_profile_picture_usecase.dart';
 import 'features/profile/presentation/bloc/profile_bloc.dart';
 import 'features/profile/presentation/bloc/profile_event.dart';
 
+import 'features/carpool/data/datasources/routes_remote_datasource.dart';
+import 'features/carpool/data/repositories/routes_repository_impl.dart';
+import 'features/carpool/domain/usecases/get_routes_usecase.dart';
+import 'features/carpool/presentation/bloc/route_selection/route_selection_bloc.dart';
+
+import 'features/carpool/data/datasources/stopovers_remote_datasource.dart';
+import 'features/carpool/data/repositories/stopovers_repository_impl.dart';
+import 'features/carpool/domain/usecases/get_stopovers_usecase.dart';
+import 'features/carpool/presentation/bloc/stopovers/stopovers_bloc.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final storedLocal = StoredLocal();
@@ -82,6 +92,8 @@ class _BlaBlaCarpoolAppState extends State<BlaBlaCarpoolApp> {
   late final CarpoolBloc _carpoolBloc;
   late final PlacesBloc _placesBloc;
   late final ProfileBloc _profileBloc;
+  late final RouteSelectionBloc _routeSelectionBloc;
+  late final StopoversBloc _stopoversBloc;
   late final GoRouter _router;
 
   @override
@@ -145,6 +157,22 @@ class _BlaBlaCarpoolAppState extends State<BlaBlaCarpoolApp> {
               UpdateProfilePictureUseCase(profileRepository),
         )..add(LoadProfileEvent()));
 
+    final routesRemoteDataSource = RoutesRemoteDataSourceImpl();
+    final routesRepository = RoutesRepositoryImpl(
+      remoteDataSource: routesRemoteDataSource,
+    );
+    _routeSelectionBloc = RouteSelectionBloc(
+      getRoutesUseCase: GetRoutesUseCase(routesRepository),
+    );
+
+    final stopoversRemoteDataSource = StopoversRemoteDataSourceImpl();
+    final stopoversRepository = StopoversRepositoryImpl(
+      remoteDataSource: stopoversRemoteDataSource,
+    );
+    _stopoversBloc = StopoversBloc(
+      getStopoversUseCase: GetStopoversUseCase(stopoversRepository),
+    );
+
     _router = AppRouter.createRouter(_authBloc);
   }
 
@@ -162,6 +190,8 @@ class _BlaBlaCarpoolAppState extends State<BlaBlaCarpoolApp> {
     if (widget.profileBloc == null) {
       _profileBloc.close();
     }
+    _routeSelectionBloc.close();
+    _stopoversBloc.close();
     _router.dispose();
     super.dispose();
   }
@@ -174,6 +204,8 @@ class _BlaBlaCarpoolAppState extends State<BlaBlaCarpoolApp> {
         BlocProvider<CarpoolBloc>.value(value: _carpoolBloc),
         BlocProvider<PlacesBloc>.value(value: _placesBloc),
         BlocProvider<ProfileBloc>.value(value: _profileBloc),
+        BlocProvider<RouteSelectionBloc>.value(value: _routeSelectionBloc),
+        BlocProvider<StopoversBloc>.value(value: _stopoversBloc),
       ],
       child: MaterialApp.router(
         title: 'Carpool',

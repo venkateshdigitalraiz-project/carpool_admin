@@ -7,32 +7,47 @@ import '../../../../core/utils/distance_calculator.dart';
 import '../../../../core/widgets/custom_button.dart';
 import '../../../../core/widgets/custom_text_field.dart';
 import '../../../places/domain/entities/place_prediction.dart';
+import '../../../places/presentation/bloc/places_bloc.dart';
+import '../../../places/presentation/bloc/places_event.dart';
 import '../../domain/entities/carpool_ride.dart';
 import '../bloc/carpool_bloc.dart';
 import '../bloc/carpool_event.dart';
+import '../bloc/route_selection/route_selection_bloc.dart';
+import '../bloc/route_selection/route_selection_event.dart';
 import '../widgets/publish_location_step_view.dart';
 import '../widgets/seat_counter.dart';
 
+import 'dart:math' as math;
+import '../../domain/entities/route_option.dart';
+// ignore: unused_import
+import 'route_selection_page.dart';
+import 'stopovers_selection_page.dart';
+
 enum PublishFlowStep {
-  pickupLocation, // Step 1: Pick-up (Screenshot 1, 2, 3)
-  dropoffLocation, // Step 2: Drop-off (Screenshot 1, 2, 3)
-  rideDetails, // Step 3: Date, Time, Price & Vehicle info
+  pickupLocation, // Step 1: Pick-up
+  dropoffLocation, // Step 2: Drop-off
+  // routeSelection, // Step 3: Route Selection ("What is your return route?") - preserved for future use
+  stopovers, // Step 4: Stopovers ("Add stopovers to get more passengers")
+  rideDetails, // Step 5: Date, Time, Price & Vehicle info
 }
 
 class PublishRidePage extends StatefulWidget {
   final VoidCallback? onPublished;
+  final VoidCallback? onExitFlow;
 
-  const PublishRidePage({super.key, this.onPublished});
+  const PublishRidePage({super.key, this.onPublished, this.onExitFlow});
 
   @override
-  State<PublishRidePage> createState() => _PublishRidePageState();
+  State<PublishRidePage> createState() => PublishRidePageState();
 }
 
-class _PublishRidePageState extends State<PublishRidePage> {
+class PublishRidePageState extends State<PublishRidePage> {
   PublishFlowStep _currentStep = PublishFlowStep.pickupLocation;
+  int _flowSessionKey = 0;
 
   PlacePrediction? _pickupLocation;
   PlacePrediction? _dropoffLocation;
+  RouteOption? _selectedRoute;
   RoutePriceEstimate? _priceEstimate;
 
   final _formKey = GlobalKey<FormState>();
@@ -41,7 +56,7 @@ class _PublishRidePageState extends State<PublishRidePage> {
   final _carPlateCtrl = TextEditingController(text: 'AP-16-AB-1234');
   final _stopCtrl = TextEditingController();
 
-  DateTime _departureDate = DateTime.now().add(const Duration(hours: 4));
+  DateTime _departureDate = DateTime.now().add(const Duration(days: 1));
   TimeOfDay _departureTime = const TimeOfDay(hour: 9, minute: 0);
 
   int _seatsAvailable = 3;
@@ -68,8 +83,34 @@ class _PublishRidePageState extends State<PublishRidePage> {
   }
 
   Future<void> _calculateRouteAndPrice() async {
-    final origin = _pickupLocation?.mainText ?? 'Vijayawada';
-    final dest = _dropoffLocation?.mainText ?? 'Hyderabad';
+    final origin = _pickupLocation?.mainText.isNotEmpty == true
+        ? _pickupLocation!.mainText
+        : (_pickupLocation?.displayAddress ?? '');
+    final dest = _dropoffLocation?.mainText.isNotEmpty == true
+        ? _dropoffLocation!.mainText
+        : (_dropoffLocation?.displayAddress ?? '');
+
+    if (origin.isEmpty || dest.isEmpty) return;
+
+    if (_selectedRoute != null) {
+      final distanceKm = _selectedRoute!.distanceKm;
+      final estimatedPrice = (distanceKm * 5.0).roundToDouble();
+      final marginMin = math.max(0.0, estimatedPrice - 50.0);
+      final marginMax = estimatedPrice >= 1000 ? estimatedPrice + 100.0 : estimatedPrice + 50.0;
+      if (mounted) {
+        setState(() {
+          _priceEstimate = RoutePriceEstimate(
+            distanceKm: distanceKm,
+            ratePerKm: 5.0,
+            estimatedPrice: estimatedPrice,
+            marginMinPrice: marginMin,
+            marginMaxPrice: marginMax,
+          );
+          _priceCtrl.text = estimatedPrice.round().toString();
+        });
+      }
+      return;
+    }
 
     final estimate = await DistanceCalculator.calculateRouteEstimate(
       originText: origin,
@@ -95,20 +136,63 @@ class _PublishRidePageState extends State<PublishRidePage> {
   void _onDropoffConfirmed(PlacePrediction location) {
     setState(() {
       _dropoffLocation = location;
-      _currentStep = PublishFlowStep.rideDetails;
+      // Step 3 (routeSelection) is temporarily commented out for future use; advance directly to stopovers:
+      _currentStep = PublishFlowStep.stopovers;
+      // _currentStep = PublishFlowStep.routeSelection;
     });
     _calculateRouteAndPrice();
+  }
+
+  // Preserved for future use when routeSelection step is re-enabled
+  // ignore: unused_element
+  void _onRouteConfirmed(RouteOption route) {
+    setState(() {
+      _selectedRoute = route;
+      _currentStep = PublishFlowStep.stopovers;
+    });
+    _calculateRouteAndPrice();
+  }
+
+  void _onStopoversConfirmed(List<String> stopovers) {
+    setState(() {
+      _intermediateStops
+        ..clear()
+        ..addAll(stopovers);
+      _currentStep = PublishFlowStep.rideDetails;
+    });
   }
 
   void _onBackFromDropoff() {
     setState(() {
       _currentStep = PublishFlowStep.pickupLocation;
+      _dropoffLocation = null;
+      _selectedRoute = null;
+    });
+  }
+
+  // Preserved for future use when routeSelection step is re-enabled
+  // ignore: unused_element
+  void _onBackFromRouteSelection() {
+    setState(() {
+      _currentStep = PublishFlowStep.dropoffLocation;
+      _selectedRoute = null;
+    });
+  }
+
+  void _onBackFromStopovers() {
+    setState(() {
+      // Step 3 (routeSelection) is temporarily commented out for future use; go back to dropoffLocation:
+      _currentStep = PublishFlowStep.dropoffLocation;
+      // _currentStep = PublishFlowStep.routeSelection;
     });
   }
 
   void _onBackFromDetails() {
     setState(() {
-      _currentStep = PublishFlowStep.dropoffLocation;
+      _currentStep = PublishFlowStep.stopovers;
+      _priceEstimate = null;
+      _priceCtrl.clear();
+      _stopCtrl.clear();
     });
   }
 
@@ -118,23 +202,33 @@ class _PublishRidePageState extends State<PublishRidePage> {
     final double price = double.tryParse(_priceCtrl.text) ??
         (_priceEstimate?.estimatedPrice ?? 1500.0);
     final distanceKm = _priceEstimate?.distanceKm ?? 300.0;
-    final scheduledDateTime = DateTime(
+    var scheduledDateTime = DateTime(
       _departureDate.year,
       _departureDate.month,
       _departureDate.day,
       _departureTime.hour,
       _departureTime.minute,
     );
+    // Ensure newly published ride departure is in the future
+    if (scheduledDateTime.isBefore(DateTime.now())) {
+      scheduledDateTime = DateTime.now().add(const Duration(hours: 4));
+    }
     final estimatedArrival = scheduledDateTime.add(
       Duration(minutes: ((distanceKm / 65.0) * 60).round()),
     );
 
-    final originMain = _pickupLocation?.mainText ?? 'Vijayawada';
-    final originAddress =
-        _pickupLocation?.displayAddress ?? 'Vijayawada, Andhra Pradesh, India';
-    final destMain = _dropoffLocation?.mainText ?? 'Hyderabad';
-    final destAddress =
-        _dropoffLocation?.displayAddress ?? 'Hyderabad, Telangana, India';
+    final originMain = _pickupLocation?.mainText.isNotEmpty == true
+        ? _pickupLocation!.mainText
+        : (_pickupLocation?.displayAddress ?? '');
+    final originAddress = _pickupLocation?.displayAddress.isNotEmpty == true
+        ? _pickupLocation!.displayAddress
+        : originMain;
+    final destMain = _dropoffLocation?.mainText.isNotEmpty == true
+        ? _dropoffLocation!.mainText
+        : (_dropoffLocation?.displayAddress ?? '');
+    final destAddress = _dropoffLocation?.displayAddress.isNotEmpty == true
+        ? _dropoffLocation!.displayAddress
+        : destMain;
 
     final newRide = CarpoolRide(
       id: 'ride-${DateTime.now().millisecondsSinceEpoch}',
@@ -186,39 +280,133 @@ class _PublishRidePageState extends State<PublishRidePage> {
       ),
     );
 
+    // Reset flow and completely clear all page details
+    _resetPublishFlow();
     widget.onPublished?.call();
+  }
+
+  void _resetPublishFlow() {
+    setState(() {
+      _flowSessionKey++;
+      _currentStep = PublishFlowStep.pickupLocation;
+      _pickupLocation = null;
+      _dropoffLocation = null;
+      _selectedRoute = null;
+      _priceEstimate = null;
+      _intermediateStops.clear();
+      _priceCtrl.clear();
+      _stopCtrl.clear();
+      _seatsAvailable = 3;
+      _instantBooking = true;
+      _acEnabled = true;
+      _departureDate = DateTime.now().add(const Duration(days: 1));
+      _departureTime = const TimeOfDay(hour: 9, minute: 0);
+    });
+    _formKey.currentState?.reset();
+    try {
+      context.read<PlacesBloc>().add(const ClearPlacesEvent());
+    } catch (_) {}
+    try {
+      context.read<RouteSelectionBloc>().add(const ClearRouteSelectionEvent());
+    } catch (_) {}
+  }
+
+  void resetFlow() {
+    _resetPublishFlow();
+  }
+
+  bool handleBack() {
+    _onStepBack();
+    return true;
+  }
+
+  void _onStepBack() {
+    switch (_currentStep) {
+      case PublishFlowStep.pickupLocation:
+        _resetPublishFlow();
+        widget.onExitFlow?.call();
+        break;
+      case PublishFlowStep.dropoffLocation:
+        _onBackFromDropoff();
+        break;
+      // case PublishFlowStep.routeSelection:
+      //   _onBackFromRouteSelection();
+      //   break;
+      case PublishFlowStep.stopovers:
+        _onBackFromStopovers();
+        break;
+      case PublishFlowStep.rideDetails:
+        _onBackFromDetails();
+        break;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return switch (_currentStep) {
-      // STEP 1: Reused Pick-up Location screen with Map
-      PublishFlowStep.pickupLocation => PublishLocationStepView(
-        key: const ValueKey('pickup_step'),
-        isPickup: true,
-        initialLocation: _pickupLocation,
-        onBack: () {},
-        onLocationConfirmed: _onPickupConfirmed,
-      ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) {
+        if (didPop) return;
+        _onStepBack();
+      },
+      child: switch (_currentStep) {
+        // STEP 1: Reused Pick-up Location screen with Map
+        PublishFlowStep.pickupLocation => PublishLocationStepView(
+          key: ValueKey('pickup_step_$_flowSessionKey'),
+          isPickup: true,
+          initialLocation: _pickupLocation,
+          onBack: _onStepBack,
+          onLocationConfirmed: _onPickupConfirmed,
+        ),
 
-      // STEP 2: Reused Drop-off Location screen with Map
-      PublishFlowStep.dropoffLocation => PublishLocationStepView(
-        key: const ValueKey('dropoff_step'),
-        isPickup: false,
-        pickupLocation: _pickupLocation,
-        initialLocation: _dropoffLocation,
-        onBack: _onBackFromDropoff,
-        onLocationConfirmed: _onDropoffConfirmed,
-      ),
+        // STEP 2: Reused Drop-off Location screen with Map
+        PublishFlowStep.dropoffLocation => PublishLocationStepView(
+          key: ValueKey('dropoff_step_$_flowSessionKey'),
+          isPickup: false,
+          pickupLocation: _pickupLocation,
+          initialLocation: _dropoffLocation,
+          onBack: _onBackFromDropoff,
+          onLocationConfirmed: _onDropoffConfirmed,
+        ),
 
-      // STEP 3: Final Ride Details & Pricing
-      PublishFlowStep.rideDetails => _buildRideDetailsView(),
-    };
+        // STEP 3: Route Selection matching Screenshot ("What is your return route?")
+        // Commented out for future use. Re-enable by uncommenting here and in PublishFlowStep enum.
+        // PublishFlowStep.routeSelection => RouteSelectionPage(
+        //   key: ValueKey('route_selection_step_$_flowSessionKey'),
+        //   origin: _pickupLocation,
+        //   destination: _dropoffLocation,
+        //   title: 'What is your return route?',
+        //   onBack: _onBackFromRouteSelection,
+        //   onRouteConfirmed: _onRouteConfirmed,
+        // ),
+
+        // STEP 4: Stopovers matching Screenshot ("Add stopovers to get more passengers")
+        PublishFlowStep.stopovers => StopoversSelectionPage(
+          key: ValueKey('stopovers_step_$_flowSessionKey'),
+          origin: _pickupLocation?.mainText.isNotEmpty == true
+              ? _pickupLocation!.mainText
+              : (_pickupLocation?.displayAddress ?? ''),
+          destination: _dropoffLocation?.mainText.isNotEmpty == true
+              ? _dropoffLocation!.mainText
+              : (_dropoffLocation?.displayAddress ?? ''),
+          selectedRoute: _selectedRoute,
+          onBack: _onBackFromStopovers,
+          onStopoversConfirmed: _onStopoversConfirmed,
+        ),
+
+        // STEP 5: Final Ride Details & Pricing
+        PublishFlowStep.rideDetails => _buildRideDetailsView(),
+      },
+    );
   }
 
   Widget _buildRideDetailsView() {
-    final originText = _pickupLocation?.mainText ?? 'Vijayawada';
-    final destText = _dropoffLocation?.mainText ?? 'Hyderabad';
+    final originText = _pickupLocation?.mainText.isNotEmpty == true
+        ? _pickupLocation!.mainText
+        : (_pickupLocation?.displayAddress ?? '');
+    final destText = _dropoffLocation?.mainText.isNotEmpty == true
+        ? _dropoffLocation!.mainText
+        : (_dropoffLocation?.displayAddress ?? '');
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -236,6 +424,27 @@ class _PublishRidePageState extends State<PublishRidePage> {
           icon: const Icon(Icons.arrow_back, color: AppColors.primaryNavy),
           onPressed: _onBackFromDetails,
         ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _resetPublishFlow();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('All ride and map details cleared'),
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            },
+            child: Text(
+              'Clear',
+              style: AppTypography.titleMedium.copyWith(
+                color: AppColors.error,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
       ),
       body: Form(
         key: _formKey,
@@ -327,6 +536,113 @@ class _PublishRidePageState extends State<PublishRidePage> {
                       ),
                     ],
                   ),
+                  if (_selectedRoute != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFD6E4EC)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.alt_route, size: 18, color: Color(0xFF0070E0)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _selectedRoute!.title,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: Color(0xFF0A1E34),
+                                  ),
+                                ),
+                                Text(
+                                  _selectedRoute!.highwayName,
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    color: Color(0xFF5E7A8A),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                            ),
+                            onPressed: () {
+                              // Route selection is temporarily commented out for future use:
+                              // setState(() {
+                              //   _currentStep = PublishFlowStep.routeSelection;
+                              // });
+                            },
+                            child: const Text('Change', style: TextStyle(fontSize: 12)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (_intermediateStops.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFD6E4EC)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.pin_drop_outlined, size: 18, color: Color(0xFF10B981)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Stopovers (${_intermediateStops.length})',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                    color: Color(0xFF0A1E34),
+                                  ),
+                                ),
+                                Text(
+                                  _intermediateStops.join(' • '),
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    color: Color(0xFF5E7A8A),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _currentStep = PublishFlowStep.stopovers;
+                              });
+                            },
+                            child: const Text('Edit', style: TextStyle(fontSize: 12)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const Divider(height: 24, color: Color(0xFFD6E4EC)),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,

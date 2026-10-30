@@ -81,16 +81,35 @@ class CarpoolBloc extends Bloc<CarpoolEvent, CarpoolState> {
         date: event.date,
         passengers: event.passengers,
       );
-      final filtered = _applyFilters(
+
+      final currentBooking = rides.isNotEmpty &&
+              rides.first.id.startsWith('ride-current-booking')
+          ? rides.first
+          : null;
+
+      var filtered = _applyFilters(
         rides: rides,
         maxPrice: state.maxPriceFilter,
         instantOnly: state.instantBookingFilter,
         verifiedOnly: state.verifiedOnlyFilter,
         sortBy: state.sortBy,
       );
+
+      // Current booking must ALWAYS be displayed on top!
+      if (currentBooking != null) {
+        filtered = [
+          currentBooking,
+          ...filtered.where((r) => r.id != currentBooking.id),
+        ];
+      }
+
       emit(state.copyWith(
         status: CarpoolStatus.loaded,
         filteredRides: filtered,
+        allRides: [
+          ...rides,
+          ...state.allRides.where((r) => !rides.any((nr) => nr.id == r.id)),
+        ],
         searchOrigin: event.origin,
         searchDestination: event.destination,
         searchDate: event.date,

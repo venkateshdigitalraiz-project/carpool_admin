@@ -65,7 +65,9 @@ class PlacesAutocompleteList extends StatelessWidget {
                     final place = predictions[index];
                     final subtitle = place.secondaryText.isNotEmpty
                         ? place.secondaryText
-                        : (place.fullText != place.mainText ? place.fullText : '');
+                        : (place.fullText != place.mainText
+                              ? place.fullText
+                              : '');
                     return InkWell(
                       onTap: () => onPlaceSelected(place),
                       child: Padding(
