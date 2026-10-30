@@ -152,6 +152,10 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           });
           return;
         }
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+          return;
+        }
         final shouldExit = await _showExitConfirmationDialog(context);
         if (shouldExit == true) {
           SystemNavigator.pop();

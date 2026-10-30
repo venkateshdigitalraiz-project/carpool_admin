@@ -53,6 +53,12 @@ import 'features/carpool/data/repositories/stopovers_repository_impl.dart';
 import 'features/carpool/domain/usecases/get_stopovers_usecase.dart';
 import 'features/carpool/presentation/bloc/stopovers/stopovers_bloc.dart';
 
+import 'features/dashboard/data/datasources/dashboard_remote_datasource.dart';
+import 'features/dashboard/data/repositories/dashboard_repository_impl.dart';
+import 'features/dashboard/domain/usecases/get_dashboard_data_usecase.dart';
+import 'features/dashboard/presentation/bloc/dashboard_bloc.dart';
+import 'features/dashboard/presentation/bloc/dashboard_event.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final storedLocal = StoredLocal();
@@ -94,6 +100,7 @@ class _BlaBlaCarpoolAppState extends State<BlaBlaCarpoolApp> {
   late final ProfileBloc _profileBloc;
   late final RouteSelectionBloc _routeSelectionBloc;
   late final StopoversBloc _stopoversBloc;
+  late final DashboardBloc _dashboardBloc;
   late final GoRouter _router;
 
   @override
@@ -173,6 +180,14 @@ class _BlaBlaCarpoolAppState extends State<BlaBlaCarpoolApp> {
       getStopoversUseCase: GetStopoversUseCase(stopoversRepository),
     );
 
+    final dashboardRemoteDataSource = DashboardRemoteDataSourceImpl();
+    final dashboardRepository = DashboardRepositoryImpl(
+      remoteDataSource: dashboardRemoteDataSource,
+    );
+    _dashboardBloc = DashboardBloc(
+      getDashboardDataUseCase: GetDashboardDataUseCase(dashboardRepository),
+    )..add(const LoadDashboardDataEvent());
+
     _router = AppRouter.createRouter(_authBloc);
   }
 
@@ -192,6 +207,7 @@ class _BlaBlaCarpoolAppState extends State<BlaBlaCarpoolApp> {
     }
     _routeSelectionBloc.close();
     _stopoversBloc.close();
+    _dashboardBloc.close();
     _router.dispose();
     super.dispose();
   }
@@ -206,6 +222,7 @@ class _BlaBlaCarpoolAppState extends State<BlaBlaCarpoolApp> {
         BlocProvider<ProfileBloc>.value(value: _profileBloc),
         BlocProvider<RouteSelectionBloc>.value(value: _routeSelectionBloc),
         BlocProvider<StopoversBloc>.value(value: _stopoversBloc),
+        BlocProvider<DashboardBloc>.value(value: _dashboardBloc),
       ],
       child: MaterialApp.router(
         title: 'Carpool',
